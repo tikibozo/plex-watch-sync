@@ -1,0 +1,16 @@
+plex_url: http://plex:32400
+
+label_name: sync
+
+refresh_interval_seconds: 600
+
+min_offset_ms: 30000
+
+libraries:
+  - "TV Shows"
+
+users:
+  - name: alice
+    token_env: PLEX_TOKEN_ALICE
+  - name: bob
+    token_env: PLEX_TOKEN_BOB
