@@ -102,7 +102,7 @@ In Plex, edit the show, add label `sync` (or whatever you set `label_name` to) u
 
 ```json
 {
-  "event": "watched" | "stop",
+  "event": "stop",
   "username": "alice",
   "rating_key": "12345",
   "grandparent_rating_key": "6789",
@@ -110,6 +110,8 @@ In Plex, edit the show, add label `sync` (or whatever you set `label_name` to) u
   "media_type": "episode"
 }
 ```
+
+`event` is either `"watched"` (episode crossed Plex's ~90% threshold — service calls `/:/scrobble`) or `"stop"` (playback stopped mid-episode — service calls `/:/progress` with `view_offset`). `media_type` must be `"episode"`; movies and other types are ignored.
 
 All values are strings (Tautulli sends them that way; the service parses ints internally). Numeric fields may be empty strings; the service treats empty as 0.
 
