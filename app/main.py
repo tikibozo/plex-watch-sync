@@ -4,9 +4,8 @@ import json
 import logging
 import os
 import time
-from typing import Annotated
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request
 
 from .config import Config, load_config
 from .plex_clients import ClientPool, PoolProtocol
@@ -19,10 +18,9 @@ logger = logging.getLogger("plex_watch_sync")
 
 
 class State:
-    def __init__(self, config: Config, pool: PoolProtocol, shared_secret: str | None) -> None:
+    def __init__(self, config: Config, pool: PoolProtocol) -> None:
         self.config = config
         self.pool = pool
-        self.shared_secret = shared_secret
         self.shared_keys: set[int] = set()
         self.last_refresh: float = 0.0
         self.ready: bool = False
@@ -189,8 +187,7 @@ def create_app(
     config = load_config(path)
     if pool is None:
         pool = ClientPool(config)
-    shared_secret = os.environ.get("TAUTULLI_WEBHOOK_SHARED_SECRET") or None
-    state = State(config, pool, shared_secret)
+    state = State(config, pool)
 
     app = FastAPI(lifespan=lifespan, title="plex-watch-sync")
     app.state.sync = state
@@ -206,12 +203,7 @@ def create_app(
         }
 
     @app.post("/webhook")
-    async def webhook(
-        request: Request,
-        x_sync_secret: Annotated[str | None, Header(alias="X-Sync-Secret")] = None,
-    ) -> dict:
-        if state.shared_secret and x_sync_secret != state.shared_secret:
-            raise HTTPException(status_code=401, detail="invalid shared secret")
+    async def webhook(request: Request) -> dict:
         if not state.ready:
             raise HTTPException(
                 status_code=503,

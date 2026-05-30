@@ -76,10 +76,7 @@ def pool() -> FakePool:
 
 
 @pytest.fixture
-def client(
-    config_path: str, pool: FakePool, monkeypatch: pytest.MonkeyPatch
-) -> Iterator[TestClient]:
-    monkeypatch.delenv("TAUTULLI_WEBHOOK_SHARED_SECRET", raising=False)
+def client(config_path: str, pool: FakePool) -> Iterator[TestClient]:
     app = create_app(config_path=config_path, pool=pool)
     with TestClient(app) as c:
         yield c

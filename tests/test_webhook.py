@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pytest
 from fastapi.testclient import TestClient
 
 from app.main import create_app
@@ -109,11 +108,8 @@ def test_non_object_json_returns_400(client: TestClient) -> None:
     assert "object" in r.json()["detail"]
 
 
-def test_all_targets_failed_returns_502(
-    config_path: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_all_targets_failed_returns_502(config_path: str) -> None:
     pool = FakePool(labeled_keys={9000}, fail_users={"bob"})
-    monkeypatch.delenv("TAUTULLI_WEBHOOK_SHARED_SECRET", raising=False)
     app = create_app(config_path=config_path, pool=pool)
     with TestClient(app) as c:
         r = c.post("/webhook", json=_episode_payload(event="watched"))
@@ -122,9 +118,7 @@ def test_all_targets_failed_returns_502(
     assert detail["failed_targets"] == ["bob"]
 
 
-def test_partial_failure_returns_partial(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_partial_failure_returns_partial(tmp_path) -> None:
     # Three-user config so we can have one success + one failure.
     cfg = tmp_path / "config.yaml"
     cfg.write_text(
@@ -145,7 +139,6 @@ users:
 """
     )
     pool = FakePool(labeled_keys={9000}, fail_users={"bob"})
-    monkeypatch.delenv("TAUTULLI_WEBHOOK_SHARED_SECRET", raising=False)
     app = create_app(config_path=str(cfg), pool=pool)
     with TestClient(app) as c:
         r = c.post("/webhook", json=_episode_payload(event="watched"))
@@ -156,11 +149,8 @@ users:
     assert body["failed_targets"] == ["bob"]
 
 
-def test_webhook_returns_503_before_first_refresh(
-    config_path: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_webhook_returns_503_before_first_refresh(config_path: str) -> None:
     pool = FakePool(labeled_keys=set(), raise_on_refresh=True)
-    monkeypatch.delenv("TAUTULLI_WEBHOOK_SHARED_SECRET", raising=False)
     app = create_app(config_path=config_path, pool=pool)
     with TestClient(app) as c:
         # Lifespan ran, refresh raised, ready stays False.
@@ -169,25 +159,6 @@ def test_webhook_returns_503_before_first_refresh(
         r = c.post("/webhook", json=_episode_payload(event="watched"))
     assert r.status_code == 503
     assert pool.watched_calls == []
-
-
-def test_shared_secret_required_when_configured(
-    config_path: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("TAUTULLI_WEBHOOK_SHARED_SECRET", "s3cret")
-    pool = FakePool(labeled_keys={9000})
-    app = create_app(config_path=config_path, pool=pool)
-    with TestClient(app) as c:
-        bad = c.post("/webhook", json=_episode_payload(event="watched"))
-        assert bad.status_code == 401
-
-        good = c.post(
-            "/webhook",
-            json=_episode_payload(event="watched"),
-            headers={"X-Sync-Secret": "s3cret"},
-        )
-        assert good.status_code == 200
-        assert good.json()["action"] == "mirrored"
 
 
 def test_healthz_reports_ready_and_set_size(client: TestClient) -> None:

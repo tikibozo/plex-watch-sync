@@ -43,7 +43,6 @@ services:
     environment:
       PLEX_TOKEN_ALICE: ${PLEX_TOKEN_ALICE}
       PLEX_TOKEN_BOB: ${PLEX_TOKEN_BOB}
-      TAUTULLI_WEBHOOK_SHARED_SECRET: ${TAUTULLI_WEBHOOK_SHARED_SECRET}
     volumes:
       - ./config.yaml:/app/config.yaml:ro
     networks:
@@ -81,8 +80,6 @@ For **each** user you want to sync, add a Notification Agent (Settings → Notif
 - **Webhook Method**: POST
 - **Triggers**: Watched, Playback Stop
 - **Conditions**: `Username` `is` `<that one user's exact Plex username>`
-- **Custom Headers** (if you set `TAUTULLI_WEBHOOK_SHARED_SECRET`):
-  - `X-Sync-Secret`: the same value
 - **Data → Watched → JSON Data**:
   ```json
   {"event":"watched","username":"{username}","rating_key":"{rating_key}","grandparent_rating_key":"{grandparent_rating_key}","view_offset":"{view_offset}","media_type":"{media_type}"}
@@ -115,7 +112,7 @@ In Plex, edit the show, add label `sync` (or whatever you set `label_name` to) u
 
 All values are strings (Tautulli sends them that way; the service parses ints internally). Numeric fields may be empty strings; the service treats empty as 0.
 
-Optional header `X-Sync-Secret` is compared against the `TAUTULLI_WEBHOOK_SHARED_SECRET` environment variable if set. Mismatches return 401. If the env var is unset, the header is not checked — fine for a fully internal Docker network.
+There is no authentication on `/webhook` — the service is intended to run on an internal-only Docker network where only trusted senders can reach it.
 
 Responses:
 
@@ -123,7 +120,6 @@ Responses:
 - `200` with `{"action": "partial", "event": "...", "targets": ["bob"], "failed_targets": ["carol"]}` when at least one target succeeded and at least one failed.
 - `200` with `{"action": "ignored", "reason": "..."}` if the event is dropped on purpose (unknown user, unlabeled show, sub-threshold offset, non-episode media).
 - `400` on malformed payloads (invalid JSON, non-object body, missing/invalid `rating_key`).
-- `401` if the shared-secret check fails.
 - `502` with `{"action": "failed", "event": "...", "failed_targets": [...]}` when every target user's Plex update failed. Sender (Tautulli) sees the failure instead of a false 200.
 - `503` until the first label-set refresh from Plex succeeds. The background loop keeps retrying; check `/healthz` `ready` field.
 
@@ -161,7 +157,6 @@ Environment variables:
 | Var | Description |
 | --- | --- |
 | `PLEX_TOKEN_*` | Per-user Plex tokens, named to match each user's `token_env` in config. |
-| `TAUTULLI_WEBHOOK_SHARED_SECRET` | Optional. If set, incoming webhooks must carry a matching `X-Sync-Secret` header. |
 | `CONFIG_PATH` | Optional. Path to `config.yaml`. Defaults to `/app/config.yaml`. |
 | `LOG_LEVEL` | Optional. Standard Python log levels. Defaults to `INFO`. |
 
