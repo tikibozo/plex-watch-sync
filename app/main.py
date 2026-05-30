@@ -89,17 +89,25 @@ def _parse_int(value: str | int | None) -> int:
     return int(value)
 
 
+def _ignore(reason: str, **fields: object) -> dict:
+    extras = " ".join(f"{k}={v}" for k, v in fields.items() if v is not None)
+    logger.info("ignored: %s%s", reason, " (" + extras + ")" if extras else "")
+    return {"action": "ignored", "reason": reason}
+
+
 async def handle_event(state: State, payload: dict) -> dict:
     event = payload.get("event")
-    if payload.get("media_type") != "episode":
-        return {"action": "ignored", "reason": "media_type not episode"}
-    if event not in {"watched", "stop"}:
-        return {"action": "ignored", "reason": "unknown event"}
-
     username = payload.get("username")
+    media_type = payload.get("media_type")
+
+    if media_type != "episode":
+        return _ignore("media_type not episode", user=username, media_type=media_type)
+    if event not in {"watched", "stop"}:
+        return _ignore("unknown event", user=username, event=event)
+
     user = next((u for u in state.config.users if u.name == username), None)
     if user is None:
-        return {"action": "ignored", "reason": "user not in sync set"}
+        return _ignore("user not in sync set", user=username)
 
     try:
         grandparent_key = _parse_int(payload.get("grandparent_rating_key"))
@@ -109,7 +117,13 @@ async def handle_event(state: State, payload: dict) -> dict:
     if rating_key == 0:
         raise HTTPException(status_code=400, detail="missing rating_key")
     if grandparent_key not in state.shared_keys:
-        return {"action": "ignored", "reason": "show not labeled"}
+        return _ignore(
+            "show not labeled",
+            user=username,
+            event=event,
+            grandparentRatingKey=grandparent_key,
+            ratingKey=rating_key,
+        )
 
     view_offset_ms: int | None = None
     if event == "stop":
@@ -118,10 +132,11 @@ async def handle_event(state: State, payload: dict) -> dict:
         except (TypeError, ValueError) as exc:
             raise HTTPException(status_code=400, detail=f"invalid view_offset: {exc}") from exc
         if view_offset_ms < state.config.min_offset_ms:
-            return {
-                "action": "ignored",
-                "reason": f"offset {view_offset_ms}ms below min",
-            }
+            return _ignore(
+                f"offset {view_offset_ms}ms below min",
+                user=username,
+                ratingKey=rating_key,
+            )
 
     targets = [u for u in state.config.users if u.name != username]
     mirrored: list[str] = []
