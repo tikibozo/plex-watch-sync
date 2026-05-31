@@ -5,6 +5,15 @@
   "schedule": ["* * * * 0"],
   "dependencyDashboard": true,
   "labels": ["renovate"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.python-version$/"],
+      "matchStrings": ["(?<currentValue>\\d+\\.\\d+)"],
+      "depNameTemplate": "python",
+      "datasourceTemplate": "docker"
+    }
+  ],
   "packageRules": [
     {
       "matchUpdateTypes": ["major"],
@@ -16,8 +25,9 @@
       "groupName": "github-actions"
     },
     {
-      "matchManagers": ["dockerfile"],
-      "groupName": "base-image"
+      "matchPackageNames": ["python"],
+      "groupName": "python",
+      "commitMessageTopic": "python"
     }
   ]
 }
