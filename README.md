@@ -204,6 +204,10 @@ uv run ruff check .
 
 `config.yaml` for local dev should point `plex_url` at a Plex you can reach, and the `PLEX_TOKEN_*` env vars must be set. The test suite uses an injected fake pool, so it runs without a real Plex.
 
+### Releasing
+
+Releases are managed by [release-please](https://github.com/googleapis/release-please). Commits to `main` must use [Conventional Commits](https://www.conventionalcommits.org/) prefixes (`feat:`, `fix:`, `chore:`, `docs:`, `ci:`, `refactor:`). release-please opens a release PR that bumps `pyproject.toml`, regenerates `CHANGELOG.md`, and tags `vX.Y.Z` when merged. The tag triggers the multi-arch image publish to GHCR. No manual version edit or changelog write-up is required.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
