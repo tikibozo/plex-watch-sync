@@ -130,7 +130,15 @@ class ClientPool:
         return (getattr(item, "viewCount", 0) or 0) > 0
 
     def mark_watched(self, user: User, rating_key: int) -> None:
-        self._fetch_item(user, rating_key).markPlayed()
+        item = self._fetch_item(user, rating_key)
+        # Plex's /:/scrobble does NOT clear viewOffset. If the target had a
+        # lingering offset (e.g. from a prior /:/progress call that got
+        # superseded by the watched mark), the "Continue Watching" carousel
+        # keeps the entry forever even though viewCount=1. Force-clear by
+        # toggling unplayed → played; markUnplayed zeroes both fields.
+        if (getattr(item, "viewOffset", 0) or 0) > 0:
+            item.markUnplayed()
+        item.markPlayed()
 
     def set_offset(self, user: User, rating_key: int, time_ms: int) -> None:
         self._fetch_item(user, rating_key).updateTimeline(time_ms, state="stopped")
@@ -202,6 +210,9 @@ class ClientPool:
                 current_offset = getattr(ep, "viewOffset", 0) or 0
                 if any_watched and not current_watched:
                     try:
+                        # Same lingering-offset clear as mark_watched().
+                        if current_offset > 0:
+                            ep.markUnplayed()
                         ep.markPlayed()
                         marked += 1
                     except Exception:
