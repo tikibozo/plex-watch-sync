@@ -22,12 +22,22 @@
     },
     {
       "matchManagers": ["github-actions"],
-      "groupName": "github-actions"
+      "groupName": "github-actions",
+      "semanticCommitType": "chore",
+      "semanticCommitScope": "ci"
+    },
+    {
+      "matchManagers": ["pep621"],
+      "semanticCommitType": "fix",
+      "semanticCommitScope": "deps"
     },
     {
       "matchPackageNames": ["python"],
       "groupName": "python",
-      "commitMessageTopic": "python"
+      "commitMessageTopic": "python",
+      "semanticCommitType": "fix",
+      "semanticCommitScope": "deps"
     }
   ]
 }
+
