@@ -17,18 +17,66 @@ logging.basicConfig(
 logger = logging.getLogger("plex_watch_sync")
 
 
+DEFAULT_STATE_PATH = "/app/state/seen_keys.json"
+
+
 class State:
-    def __init__(self, config: Config, pool: PoolProtocol) -> None:
+    def __init__(
+        self,
+        config: Config,
+        pool: PoolProtocol,
+        state_path: str | None = None,
+    ) -> None:
         self.config = config
         self.pool = pool
         self.shared_keys: set[int] = set()
         self.last_refresh: float = 0.0
         self.ready: bool = False
+        self.state_path: str = state_path or os.environ.get(
+            "STATE_PATH", DEFAULT_STATE_PATH
+        )
+        # seen_keys: shows we've already observed-and-reconciled. Persisted so
+        # restarts don't trigger spurious reconcile, and so the very first run
+        # (file missing) is distinguishable from "no labels yet".
+        self.seen_keys: set[int] = set()
+        self._state_loaded: bool = False
+        self._load_state()
         self._refresh_task: asyncio.Task[None] | None = None
         self._stop = asyncio.Event()
 
+    def _load_state(self) -> None:
+        try:
+            with open(self.state_path) as f:
+                data = json.load(f)
+            self.seen_keys = {int(k) for k in data.get("seen", [])}
+            self._state_loaded = True
+            logger.info("loaded %d seen keys from %s", len(self.seen_keys), self.state_path)
+        except FileNotFoundError:
+            self.seen_keys = set()
+            self._state_loaded = False
+            logger.info("no state file at %s — first run", self.state_path)
+        except Exception:
+            self.seen_keys = set()
+            self._state_loaded = False
+            logger.exception("failed to load state from %s; starting fresh", self.state_path)
+
+    def _save_state(self) -> None:
+        try:
+            d = os.path.dirname(self.state_path)
+            if d:
+                os.makedirs(d, exist_ok=True)
+            tmp = self.state_path + ".tmp"
+            with open(tmp, "w") as f:
+                json.dump({"seen": sorted(self.seen_keys)}, f)
+            os.replace(tmp, self.state_path)
+        except Exception:
+            logger.exception("failed to save state to %s", self.state_path)
+
     async def refresh_shared_keys(self) -> None:
         keys = await asyncio.to_thread(self.pool.list_labeled_show_keys)
+        added = keys - self.seen_keys
+        removed = self.seen_keys - keys
+
         self.shared_keys = keys
         self.last_refresh = time.time()
         self.ready = True
@@ -37,6 +85,40 @@ class State:
             len(keys),
             self.config.libraries,
         )
+
+        # Drop unlabel-ed shows from seen so re-labeling re-triggers reconcile.
+        if removed:
+            self.seen_keys -= removed
+
+        # On very first run (no state file ever existed), don't reconcile any
+        # already-labeled shows. Users opt in to reconciliation by labeling a
+        # show while the service is running. After this first refresh, seen
+        # is bootstrapped to match the current shared set.
+        if added and not self._state_loaded and not self.seen_keys:
+            logger.info(
+                "first run: initializing seen with %d existing labeled show(s); "
+                "no reconcile",
+                len(added),
+            )
+            self.seen_keys = set(keys)
+            self._state_loaded = True
+            self._save_state()
+            return
+
+        if removed and not added:
+            self._save_state()
+            return
+
+        for key in sorted(added):
+            logger.info("reconciling newly-labeled show ratingKey=%d", key)
+            try:
+                await asyncio.to_thread(self.pool.reconcile_show, key)
+            except Exception:
+                logger.exception("reconcile failed for ratingKey=%d", key)
+                # Don't mark seen — retry on the next refresh.
+                continue
+            self.seen_keys.add(key)
+            self._save_state()
 
     async def refresh_loop(self) -> None:
         while not self._stop.is_set():
@@ -197,12 +279,13 @@ def create_app(
     config_path: str | None = None,
     *,
     pool: PoolProtocol | None = None,
+    state_path: str | None = None,
 ) -> FastAPI:
     path = config_path or os.environ.get("CONFIG_PATH", "/app/config.yaml")
     config = load_config(path)
     if pool is None:
         pool = ClientPool(config)
-    state = State(config, pool)
+    state = State(config, pool, state_path=state_path)
 
     app = FastAPI(lifespan=lifespan, title="plex-watch-sync")
     app.state.sync = state

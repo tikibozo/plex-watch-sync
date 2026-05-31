@@ -108,9 +108,9 @@ def test_non_object_json_returns_400(client: TestClient) -> None:
     assert "object" in r.json()["detail"]
 
 
-def test_all_targets_failed_returns_502(config_path: str) -> None:
+def test_all_targets_failed_returns_502(config_path: str, state_path: str) -> None:
     pool = FakePool(labeled_keys={9000}, fail_users={"bob"})
-    app = create_app(config_path=config_path, pool=pool)
+    app = create_app(config_path=config_path, pool=pool, state_path=state_path)
     with TestClient(app) as c:
         r = c.post("/webhook", json=_episode_payload(event="watched"))
     assert r.status_code == 502
@@ -139,7 +139,9 @@ users:
 """
     )
     pool = FakePool(labeled_keys={9000}, fail_users={"bob"})
-    app = create_app(config_path=str(cfg), pool=pool)
+    app = create_app(
+        config_path=str(cfg), pool=pool, state_path=str(tmp_path / "seen.json")
+    )
     with TestClient(app) as c:
         r = c.post("/webhook", json=_episode_payload(event="watched"))
     assert r.status_code == 200
@@ -149,9 +151,11 @@ users:
     assert body["failed_targets"] == ["bob"]
 
 
-def test_webhook_returns_503_before_first_refresh(config_path: str) -> None:
+def test_webhook_returns_503_before_first_refresh(
+    config_path: str, state_path: str
+) -> None:
     pool = FakePool(labeled_keys=set(), raise_on_refresh=True)
-    app = create_app(config_path=config_path, pool=pool)
+    app = create_app(config_path=config_path, pool=pool, state_path=state_path)
     with TestClient(app) as c:
         # Lifespan ran, refresh raised, ready stays False.
         h = c.get("/healthz").json()

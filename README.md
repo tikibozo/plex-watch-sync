@@ -45,6 +45,7 @@ services:
       PLEX_TOKEN_BOB: ${PLEX_TOKEN_BOB}
     volumes:
       - ./config.yaml:/app/config.yaml:ro
+      - ./state:/app/state           # writable; holds reconcile bookkeeping
     networks:
       - plex
     # No host port published; reached via Docker DNS at
@@ -87,6 +88,21 @@ For **each** user you want to sync, add a Notification Agent (Settings → Notif
 - **Data → Playback Stop → JSON Data**: same payload, but `"event":"stop"`.
 
 The per-user `Username is …` condition is what scopes each agent to one account. Without it, every user on the server would generate events.
+
+## Auto-reconcile on label
+
+When the service notices a show *newly appearing* in the labeled set (i.e. the show wasn't in the previous refresh and is now), it runs a one-time reconciliation across every configured user for that show:
+
+- For each episode of the show, if **any** configured user has it marked watched, mark it watched for every user who hasn't.
+- Otherwise, if any user has a `view_offset` that exceeds another user's by more than `min_offset_ms`, set the larger offset on the lagging users.
+
+The reconciler **never un-watches** an episode and **never rewinds** an offset — it only catches lagging accounts up to the most-progressed account. This handles the common case of "we were watching this show separately, now we want to share progress."
+
+The set of already-reconciled shows is persisted to a state file (default `/app/state/seen_keys.json`) so container restarts don't re-run reconcile, and so unlabeling + re-labeling acts as a manual "redo reconcile" trigger.
+
+**First run is a special case:** when the state file doesn't yet exist, the first refresh after startup records every currently-labeled show as already-seen *without* reconciling. Otherwise upgrading the service for the first time would silently cross-pollinate every show you'd ever labeled.
+
+The corollary: if you label a show **before** the service is running, no reconcile will fire. Either label while the service is up, or unlabel + relabel after it starts.
 
 ## Marking a show for sync
 
@@ -158,6 +174,7 @@ Environment variables:
 | --- | --- |
 | `PLEX_TOKEN_*` | Per-user Plex tokens, named to match each user's `token_env` in config. |
 | `CONFIG_PATH` | Optional. Path to `config.yaml`. Defaults to `/app/config.yaml`. |
+| `STATE_PATH` | Optional. Path to the seen-keys JSON state file. Defaults to `/app/state/seen_keys.json`. The containing directory must be writable by the container's uid (10001). |
 | `LOG_LEVEL` | Optional. Standard Python log levels. Defaults to `INFO`. |
 
 ## Limitations

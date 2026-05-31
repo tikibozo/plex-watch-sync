@@ -45,6 +45,7 @@ class FakePool:
         self.raise_on_refresh = raise_on_refresh
         self.watched_calls: list[tuple[str, int]] = []
         self.offset_calls: list[tuple[str, int, int]] = []
+        self.reconcile_calls: list[int] = []
 
     def list_labeled_show_keys(self) -> set[int]:
         if self.raise_on_refresh:
@@ -61,6 +62,10 @@ class FakePool:
             raise RuntimeError(f"mock failure for {user.name}")
         self.offset_calls.append((user.name, rating_key, time_ms))
 
+    def reconcile_show(self, show_rating_key: int) -> dict:
+        self.reconcile_calls.append(show_rating_key)
+        return {"show": show_rating_key, "users": []}
+
 
 @pytest.fixture
 def config_path(tmp_path: Path) -> str:
@@ -76,7 +81,14 @@ def pool() -> FakePool:
 
 
 @pytest.fixture
-def client(config_path: str, pool: FakePool) -> Iterator[TestClient]:
-    app = create_app(config_path=config_path, pool=pool)
+def state_path(tmp_path: Path) -> str:
+    return str(tmp_path / "seen_keys.json")
+
+
+@pytest.fixture
+def client(
+    config_path: str, pool: FakePool, state_path: str
+) -> Iterator[TestClient]:
+    app = create_app(config_path=config_path, pool=pool, state_path=state_path)
     with TestClient(app) as c:
         yield c

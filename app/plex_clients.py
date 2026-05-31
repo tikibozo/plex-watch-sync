@@ -22,6 +22,8 @@ class PoolProtocol(Protocol):
 
     def set_offset(self, user: User, rating_key: int, time_ms: int) -> None: ...
 
+    def reconcile_show(self, show_rating_key: int) -> dict: ...
+
 
 class ClientPool:
     """Talks to Plex on behalf of N configured users.
@@ -128,3 +130,105 @@ class ClientPool:
             },
             timeout=10,
         ).raise_for_status()
+
+    def reconcile_show(self, show_rating_key: int) -> dict:
+        """Bring all configured users to the union of watched-state for one show.
+
+        For every episode of the show:
+        - If ANY user has watched it → mark watched for everyone who hasn't.
+        - Otherwise, if any user has a view_offset > config.min_offset_ms beyond
+          the max we'd already record → set everyone's offset to the max.
+
+        Never un-watches and never rewinds. Returns a summary dict.
+        """
+        per_user: dict[str, dict[int, object]] = {}
+        for user in self._config.users:
+            try:
+                token = self._server_token(user)
+                server = PlexServer(self._config.plex_url, token)
+                show = server.fetchItem(show_rating_key)
+                if show is None:
+                    logger.warning(
+                        "reconcile: user %s has no access to show ratingKey=%d",
+                        user.name,
+                        show_rating_key,
+                    )
+                    continue
+                per_user[user.name] = {ep.ratingKey: ep for ep in show.episodes()}
+            except Exception:
+                logger.exception(
+                    "reconcile: failed to fetch show %d for user %s",
+                    show_rating_key,
+                    user.name,
+                )
+
+        if len(per_user) < 2:
+            logger.info(
+                "reconcile show=%d: fewer than 2 users could load; skipping",
+                show_rating_key,
+            )
+            return {"show": show_rating_key, "skipped": True, "users": list(per_user)}
+
+        all_ep_keys: set[int] = set()
+        for eps in per_user.values():
+            all_ep_keys.update(eps.keys())
+
+        marked = 0
+        offset_updated = 0
+        errors = 0
+
+        for ep_key in sorted(all_ep_keys):
+            any_watched = False
+            max_offset = 0
+            for eps in per_user.values():
+                ep = eps.get(ep_key)
+                if ep is None:
+                    continue
+                if (getattr(ep, "viewCount", 0) or 0) > 0:
+                    any_watched = True
+                offset = getattr(ep, "viewOffset", 0) or 0
+                if offset > max_offset:
+                    max_offset = offset
+
+            for name, eps in per_user.items():
+                ep = eps.get(ep_key)
+                if ep is None:
+                    continue
+                current_watched = (getattr(ep, "viewCount", 0) or 0) > 0
+                current_offset = getattr(ep, "viewOffset", 0) or 0
+                if any_watched and not current_watched:
+                    try:
+                        ep.markPlayed()
+                        marked += 1
+                    except Exception:
+                        errors += 1
+                        logger.exception(
+                            "reconcile: markPlayed failed for user=%s ep=%d",
+                            name,
+                            ep_key,
+                        )
+                elif (
+                    not any_watched
+                    and max_offset > current_offset + self._config.min_offset_ms
+                ):
+                    try:
+                        ep.updateTimeline(max_offset, state="stopped")
+                        offset_updated += 1
+                    except Exception:
+                        errors += 1
+                        logger.exception(
+                            "reconcile: updateTimeline failed for user=%s ep=%d",
+                            name,
+                            ep_key,
+                        )
+
+        summary = {
+            "show": show_rating_key,
+            "users": list(per_user),
+            "episodes_considered": len(all_ep_keys),
+            "watched_marked": marked,
+            "offset_updated": offset_updated,
+            "errors": errors,
+        }
+        logger.info("reconcile done: %s", summary)
+        return summary
