@@ -18,6 +18,8 @@ class PoolProtocol(Protocol):
 
     def list_labeled_show_keys(self) -> set[int]: ...
 
+    def is_watched(self, user: User, rating_key: int) -> bool: ...
+
     def mark_watched(self, user: User, rating_key: int) -> None: ...
 
     def set_offset(self, user: User, rating_key: int, time_ms: int) -> None: ...
@@ -50,6 +52,8 @@ class ClientPool:
         self._owner_user: User | None = None
         # Per-user *server* access tokens (not the plex.tv account tokens).
         self._server_token_by_user: dict[str, str] = {}
+        # Per-user PlexServer wrapping that user's server access token.
+        self._friend_servers: dict[str, PlexServer] = {}
 
     def _get_owner_server(self) -> PlexServer:
         if self._owner_server is not None:
@@ -94,6 +98,24 @@ class ClientPool:
             f"(machineIdentifier={machine_id})"
         )
 
+    def _friend_server(self, user: User) -> PlexServer:
+        cached = self._friend_servers.get(user.name)
+        if cached is not None:
+            return cached
+        token = self._server_token(user)
+        server = PlexServer(self._config.plex_url, token)
+        self._friend_servers[user.name] = server
+        return server
+
+    def _fetch_item(self, user: User, rating_key: int):
+        server = self._friend_server(user)
+        item = server.fetchItem(rating_key)
+        if item is None:
+            raise RuntimeError(
+                f"plex returned no item for ratingKey={rating_key} (user={user.name})"
+            )
+        return item
+
     def list_labeled_show_keys(self) -> set[int]:
         plex = self._get_owner_server()
         keys: set[int] = set()
@@ -103,33 +125,15 @@ class ClientPool:
                 keys.add(int(show.ratingKey))
         return keys
 
+    def is_watched(self, user: User, rating_key: int) -> bool:
+        item = self._fetch_item(user, rating_key)
+        return (getattr(item, "viewCount", 0) or 0) > 0
+
     def mark_watched(self, user: User, rating_key: int) -> None:
-        owner = self._get_owner_server()
-        token = self._server_token(user)
-        owner._session.get(
-            f"{self._config.plex_url}/:/scrobble",
-            params={
-                "identifier": "com.plexapp.plugins.library",
-                "key": str(rating_key),
-                "X-Plex-Token": token,
-            },
-            timeout=10,
-        ).raise_for_status()
+        self._fetch_item(user, rating_key).markPlayed()
 
     def set_offset(self, user: User, rating_key: int, time_ms: int) -> None:
-        owner = self._get_owner_server()
-        token = self._server_token(user)
-        owner._session.get(
-            f"{self._config.plex_url}/:/progress",
-            params={
-                "identifier": "com.plexapp.plugins.library",
-                "key": str(rating_key),
-                "time": str(time_ms),
-                "state": "stopped",
-                "X-Plex-Token": token,
-            },
-            timeout=10,
-        ).raise_for_status()
+        self._fetch_item(user, rating_key).updateTimeline(time_ms, state="stopped")
 
     def reconcile_show(self, show_rating_key: int) -> dict:
         """Bring all configured users to the union of watched-state for one show.

@@ -221,6 +221,43 @@ async def handle_event(state: State, payload: dict) -> dict:
             )
 
     targets = [u for u in state.config.users if u.name != username]
+
+    # On a stop event, skip targets that already have the episode marked
+    # watched — Tautulli often fires Watched then Stop in close sequence
+    # for the same play, and the trailing Stop's view_offset would
+    # otherwise downgrade the prior watched mark to "in-progress at 99%".
+    if event == "stop":
+        kept: list = []
+        skipped: list[str] = []
+        for target in targets:
+            try:
+                already = await asyncio.to_thread(
+                    state.pool.is_watched, target, rating_key
+                )
+            except Exception:
+                logger.exception(
+                    "is_watched check failed for %s; proceeding with set_offset",
+                    target.name,
+                )
+                already = False
+            if already:
+                skipped.append(target.name)
+            else:
+                kept.append(target)
+        if skipped:
+            logger.info(
+                "skip stop->offset: already-watched targets user=%s ratingKey=%d skipped=%s",
+                username,
+                rating_key,
+                skipped,
+            )
+        if not kept:
+            return _ignore(
+                "all targets already watched",
+                user=username,
+                ratingKey=rating_key,
+            )
+        targets = kept
     mirrored: list[str] = []
     failed: list[str] = []
     for target in targets:

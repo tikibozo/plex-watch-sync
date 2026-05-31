@@ -165,6 +165,29 @@ def test_webhook_returns_503_before_first_refresh(
     assert pool.watched_calls == []
 
 
+def test_stop_event_skips_targets_already_watched(
+    config_path: str, state_path: str
+) -> None:
+    """Tautulli often fires Watched then Stop in close sequence for the
+    same play. The trailing Stop carries a near-end view_offset that
+    would downgrade the prior watched mark to 'in-progress at 99%' if
+    we naively call set_offset. We pre-check each target's state and
+    skip set_offset for targets that already have it marked watched."""
+    pool = FakePool(
+        labeled_keys={9000},
+        already_watched={("bob", 12345)},
+    )
+    app = create_app(config_path=config_path, pool=pool, state_path=state_path)
+    with TestClient(app) as c:
+        r = c.post("/webhook", json=_episode_payload(event="stop", view_offset="696654"))
+    assert r.status_code == 200
+    body = r.json()
+    assert body["action"] == "ignored"
+    assert "already watched" in body["reason"]
+    assert pool.offset_calls == []
+    assert pool.is_watched_calls == [("bob", 12345)]
+
+
 def test_healthz_reports_ready_and_set_size(client: TestClient) -> None:
     r = client.get("/healthz")
     assert r.status_code == 200

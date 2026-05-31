@@ -32,6 +32,8 @@ The opt-in mechanism is a Plex label (default: `sync`). Any show without the lab
 - If the event's show is in that set and the user is in the configured user list, the service calls Plex's `/:/scrobble` (watched) or `/:/progress` (partial offset) endpoint using each *other* user's token.
 - Those endpoints mutate watched state without creating a play session, so Tautulli does not re-fire — no feedback loop.
 
+When Tautulli fires **Watched** and **Playback Stop** in close sequence for the same play (the common case of "watched to 99% and stopped"), the service pre-checks each target's current watched flag before issuing the trailing `/:/progress` call and **skips targets that already have it marked watched**. This avoids downgrading a freshly-mirrored watched mark back to "in-progress at 99%".
+
 ## Quick start (Docker Compose)
 
 ```yaml

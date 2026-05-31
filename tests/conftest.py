@@ -39,23 +39,31 @@ class FakePool:
         labeled_keys: set[int] | None = None,
         fail_users: set[str] | None = None,
         raise_on_refresh: bool = False,
+        already_watched: set[tuple[str, int]] | None = None,
     ) -> None:
         self.labeled_keys = set(labeled_keys or set())
         self.fail_users = set(fail_users or set())
         self.raise_on_refresh = raise_on_refresh
+        self.already_watched = set(already_watched or set())
         self.watched_calls: list[tuple[str, int]] = []
         self.offset_calls: list[tuple[str, int, int]] = []
         self.reconcile_calls: list[int] = []
+        self.is_watched_calls: list[tuple[str, int]] = []
 
     def list_labeled_show_keys(self) -> set[int]:
         if self.raise_on_refresh:
             raise RuntimeError("plex unreachable (test)")
         return set(self.labeled_keys)
 
+    def is_watched(self, user: User, rating_key: int) -> bool:
+        self.is_watched_calls.append((user.name, rating_key))
+        return (user.name, rating_key) in self.already_watched
+
     def mark_watched(self, user: User, rating_key: int) -> None:
         if user.name in self.fail_users:
             raise RuntimeError(f"mock failure for {user.name}")
         self.watched_calls.append((user.name, rating_key))
+        self.already_watched.add((user.name, rating_key))
 
     def set_offset(self, user: User, rating_key: int, time_ms: int) -> None:
         if user.name in self.fail_users:
