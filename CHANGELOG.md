@@ -4,6 +4,16 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] — 2026-05-31
+
+### Changed
+
+- Release workflow now publishes multi-arch images
+  (`linux/amd64` + `linux/arm64`). Same code, just buildable on ARM
+  hosts (Raspberry Pi, Apple Silicon dev boxes, ARM cloud VMs)
+  without per-arch forks. Adds ~2–3 min to the release build via QEMU
+  emulation; no behavior change for x86_64 consumers.
+
 ## [0.5.1] — 2026-05-31
 
 ### Fixed

@@ -1,6 +1,6 @@
 [project]
 name = "plex-watch-sync"
-version = "0.5.1"
+version = "0.5.2"
 description = "Mirror Plex watched state and view-offset between multiple accounts on the same server, scoped by a Plex label."
 readme = "README.md"
 requires-python = ">=3.12"
