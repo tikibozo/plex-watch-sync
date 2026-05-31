@@ -179,11 +179,19 @@ Environment variables:
 | `STATE_PATH` | Optional. Path to the seen-keys JSON state file. Defaults to `/app/state/seen_keys.json`. The containing directory must be writable by the container's uid (10001). |
 | `LOG_LEVEL` | Optional. Standard Python log levels. Defaults to `INFO`. |
 
-## Limitations
+## Limitations & known constraints
 
-- Only TV episodes are mirrored. Movies are out of scope (same code path would work but the label-gating story is different and not yet implemented).
-- Tautulli is the reference event source. Any other source that POSTs the same JSON payload to `/webhook` will work.
-- This is a watched-state mirror, not a real-time playback follower. There is no attempt to keep both clients in sync while playback is active.
+These come from things we hit running this against a real Plex deployment.
+
+- **TV episodes only.** Movies are out of scope. The same code path would work for movies, but the label-gating story is different (you'd label individual movies rather than a parent), so it's not implemented.
+- **Tautulli is the reference event source.** Any other source that POSTs the documented JSON payload to `/webhook` will work, but Tautulli is what's been tested.
+- **No real-time playback following.** This is a watched-state mirror, not a "stay in sync while we both watch on different clients" tool.
+- **No webhook authentication.** Tautulli's stock webhook agent (verified through v2.17.1) has no custom-headers field in the UI, so a shared-secret header can't be sent. The service is intended to run on an internal-only Docker network where only trusted senders can reach it.
+- **Owner + friends model.** Configure the Plex server owner plus N "friend" accounts (separate plex.tv accounts that have been shared this server's libraries). Plex Home/managed users are not tested — they may need different handling because Plex stores their state under the parent plex.tv account.
+- **Outbound to `plex.tv` required at startup.** For each non-owner configured user, the service makes one `MyPlexAccount.resources()` call to exchange their plex.tv token for a server-specific access token. After the first event involving a given friend, that token is cached for the process lifetime.
+- **`mark-watched` clears `viewOffset` explicitly.** Plex's `/:/scrobble` does not zero `viewOffset` — leaving it non-zero keeps the episode in the "Continue Watching" carousel even when `viewCount=1`. The service works around this by toggling unplayed → played when the offset is non-zero. If you build a similar tool from scratch, don't get caught by this.
+- **Sub-30-second stops are ignored.** `min_offset_ms` defaults to 30 s; below that we drop the event to avoid mirroring false starts (seek attempts, accidental plays).
+- **State file is self-rebuilding.** `/app/state/seen_keys.json` only records which labeled shows have already been auto-reconciled. Deleting it triggers a fresh first-run init (no reconcile of pre-existing labels). It is not a backup-critical file.
 
 ## Development
 
