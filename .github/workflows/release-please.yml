@@ -12,6 +12,13 @@ permissions:
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    # Use a PAT (RELEASE_PLEASE_TOKEN) so the release PR triggers its required
+    # checks AND its merge re-triggers this workflow to tag + build. A
+    # GITHUB_TOKEN-opened PR triggers neither (GitHub's recursion guard). Falls
+    # back to GITHUB_TOKEN (semi-manual: release PR opens, you merge it) when the
+    # secret is absent, so the pipeline keeps working before the PAT is added.
+    env:
+      RP_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
     outputs:
       release_created: ${{ steps.rp.outputs.release_created }}
       version: ${{ steps.rp.outputs.version }}
@@ -20,7 +27,23 @@ jobs:
       - uses: googleapis/release-please-action@v5
         id: rp
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+
+      # Fully hands-off: let GitHub auto-merge the release PR once required checks
+      # pass. Only runs when the PAT is set (a GITHUB_TOKEN merge wouldn't re-trigger
+      # the tag/build job below). Majors are gated at the Renovate layer, not here.
+      - name: Enable auto-merge on the release PR
+        if: ${{ steps.rp.outputs.pr != '' && env.RP_TOKEN != '' }}
+        continue-on-error: true
+        # Parse the PR number with jq inside run, NOT fromJSON in env: GitHub
+        # evaluates step env expressions eagerly (even when `if` is false), so
+        # fromJSON('') would throw on pushes where release-please opens no PR.
+        env:
+          GH_TOKEN: ${{ env.RP_TOKEN }}
+          PR_JSON: ${{ steps.rp.outputs.pr }}
+        run: |
+          number=$(echo "$PR_JSON" | jq -r '.number')
+          gh pr merge "$number" --repo "$GITHUB_REPOSITORY" --squash --auto
 
   # Releases created via GITHUB_TOKEN do not fire the `release` or `push: tags`
   # events, so we call the build workflow directly when a release is cut.
