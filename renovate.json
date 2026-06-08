@@ -5,6 +5,9 @@
   "schedule": ["* * * * 0"],
   "dependencyDashboard": true,
   "labels": ["renovate"],
+  "automerge": true,
+  "platformAutomerge": true,
+  "automergeStrategy": "squash",
   "customManagers": [
     {
       "customType": "regex",
@@ -18,7 +21,8 @@
     {
       "matchUpdateTypes": ["major"],
       "addLabels": ["major"],
-      "minimumReleaseAge": "3 days"
+      "minimumReleaseAge": "3 days",
+      "automerge": false
     },
     {
       "matchManagers": ["github-actions"],
