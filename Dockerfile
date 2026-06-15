@@ -5,6 +5,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
+# Pull patched OS packages (e.g. libssl3t64) from the Debian security repo. The
+# base tag lags fresh CVE fixes between Docker's periodic rebuilds, so upgrade
+# in place to keep the Trivy gate green.
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+
 RUN groupadd -g 10001 -r app && useradd -u 10001 -r -g app -M -s /sbin/nologin app
 
 WORKDIR /app
