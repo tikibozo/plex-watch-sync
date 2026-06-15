@@ -4,6 +4,13 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.4](https://github.com/tikibozo/plex-watch-sync/compare/v0.5.3...v0.5.4) (2026-06-15)
+
+
+### Bug Fixes
+
+* **security:** patch OpenSSL CVE-2026-45447 in base image ([#8](https://github.com/tikibozo/plex-watch-sync/issues/8)) ([6ec8fc6](https://github.com/tikibozo/plex-watch-sync/commit/6ec8fc64b0ad2864709835003acfc6b394fdea4f))
+
 ## [0.5.3](https://github.com/tikibozo/plex-watch-sync/compare/v0.5.2...v0.5.3) (2026-05-31)
 
 
