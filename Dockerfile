@@ -17,7 +17,14 @@ WORKDIR /app
 COPY pyproject.toml README.md /app/
 COPY app/ /app/app/
 
-RUN pip install --upgrade pip && pip install .
+# Install the app, then remove pip itself. Nothing runs pip at runtime (the
+# container starts uvicorn as a non-root user), and pip 26.2+ ships a vendored
+# dependency set with its own CycloneDX SBOM at pip/_vendor/bom.cdx.json. Image
+# scanners read that SBOM and report CVEs for the vendored copies (msgpack,
+# setuptools) even though the app never imports them and they are unreachable in
+# a running container. Dropping pip removes the package manager from the runtime
+# image, which is worth doing on its own terms.
+RUN pip install --upgrade pip && pip install . && python -m pip uninstall -y pip
 
 RUN chown -R app:app /app
 
