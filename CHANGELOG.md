@@ -4,6 +4,13 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.5](https://github.com/tikibozo/plex-watch-sync/compare/v0.5.4...v0.5.5) (2026-08-21)
+
+
+### Bug Fixes
+
+* **docker:** drop pip from the runtime image to keep the Trivy gate green ([#15](https://github.com/tikibozo/plex-watch-sync/issues/15)) ([39947fe](https://github.com/tikibozo/plex-watch-sync/commit/39947fe2c556c40e2e87e255b71a558983c62b95))
+
 ## [0.5.4](https://github.com/tikibozo/plex-watch-sync/compare/v0.5.3...v0.5.4) (2026-06-15)
 
 
