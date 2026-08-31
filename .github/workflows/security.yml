@@ -37,9 +37,55 @@ jobs:
     # already-published :latest on a schedule to catch CVEs that emerge
     # after the release.
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    outputs:
+      findings: ${{ steps.scan.outcome == 'failure' }}
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v7
       - name: Run Trivy on published image
+        id: scan
+        # Findings don't fail the run here; they trigger the Trivy-gated
+        # rebuild below. The run only goes red if the rebuild can't clear them.
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/${{ github.repository }}:latest
+          severity: 'HIGH,CRITICAL'
+          exit-code: '1'
+          ignore-unfixed: true
+          format: 'table'
+      - name: Resolve current release version
+        id: version
+        if: steps.scan.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
+  # Fixable CVEs in the published image (new CVEs in unchanged base-image
+  # packages, which Renovate structurally can't see) are cleared by rebuilding
+  # main at the current version; the build's own Trivy gate blocks the push if
+  # the fix isn't actually available upstream yet.
+  rebuild:
+    name: Auto-rebuild on findings
+    needs: trivy
+    if: needs.trivy.outputs.findings == 'true'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/release.yml
+    with:
+      version: ${{ needs.trivy.outputs.version }}
+    secrets: inherit
+
+  verify:
+    name: Verify rebuilt :latest
+    needs: [trivy, rebuild]
+    if: needs.trivy.outputs.findings == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Re-scan published image
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ghcr.io/${{ github.repository }}:latest
