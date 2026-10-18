@@ -4,6 +4,13 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.6](https://github.com/tikibozo/plex-watch-sync/compare/v0.5.5...v0.5.6) (2026-10-18)
+
+
+### Bug Fixes
+
+* **deps:** update python to v3.15 ([#18](https://github.com/tikibozo/plex-watch-sync/issues/18)) ([490414f](https://github.com/tikibozo/plex-watch-sync/commit/490414f421e8d14ea5e6e0b2ec4e81f9e2924313))
+
 ## [0.5.5](https://github.com/tikibozo/plex-watch-sync/compare/v0.5.4...v0.5.5) (2026-08-21)
 
 
