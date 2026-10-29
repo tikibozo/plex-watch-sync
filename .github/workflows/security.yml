@@ -47,7 +47,7 @@ jobs:
         # Findings don't fail the run here; they trigger the Trivy-gated
         # rebuild below. The run only goes red if the rebuild can't clear them.
         continue-on-error: true
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ghcr.io/${{ github.repository }}:latest
           severity: 'HIGH,CRITICAL'
@@ -86,7 +86,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Re-scan published image
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ghcr.io/${{ github.repository }}:latest
           severity: 'HIGH,CRITICAL'
