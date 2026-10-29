@@ -41,7 +41,18 @@
       "commitMessageTopic": "python",
       "semanticCommitType": "fix",
       "semanticCommitScope": "deps"
+    },
+    {
+      "matchUpdateTypes": ["lockFileMaintenance"],
+      "semanticCommitType": "chore",
+      "semanticCommitScope": "deps",
+      "commitMessageAction": "refresh",
+      "commitMessageTopic": "uv.lock"
     }
-  ]
+  ],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": true,
+    "schedule": ["* * * * 0"]
+  }
 }
-
