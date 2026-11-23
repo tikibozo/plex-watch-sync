@@ -70,8 +70,12 @@ jobs:
           platforms: linux/amd64
           load: true
           tags: ${{ env.IMAGE_NAME }}:scan
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # No registry/GHA layer cache, on purpose: a cached `apt-get upgrade` /
+          # `apk upgrade` / `pip install` layer is keyed on the base-image digest,
+          # so it is replayed with stale packages until the base tag is
+          # republished, and the weekly self-heal rebuild then republishes the same
+          # vulnerable image. The multi-arch step still reuses this step's amd64
+          # layers from the in-job buildx builder.
 
       - name: Trivy scan (block on HIGH/CRITICAL, fixable only)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -90,5 +94,3 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
